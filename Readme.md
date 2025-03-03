@@ -109,27 +109,32 @@ Make use of chi-router for the server part
 - Basically this is used to authenticate the user before accessing any of the routes.
 - It checks with the APIKEY and the data base to authenticate the user.
 
-{
-"name": "Hacker News",
-"url": "https://news.ycombinator.com/rss"
-}
+### USING APICURIO
 
-{
-"name": "BBC Technology",
-"url": "http://feeds.bbci.co.uk/news/technology/rss.xml"
-}
+- Setting up of the API i created with schema validation using APICURIO Registry
+- Command for returning the schema - `curl -X GET "http://localhost:9090/api/artifacts/my-schema"`
+- schema validation basically ensured on the data validation and the Requests that come along and also provides the version control.
+- And Performed a Build on Github Action so that API can access the registry and for CI/CD and automating it basically.
 
-{
-"name": "Ars Technica",
-"url": "http://feeds.arstechnica.com/arstechnica/index"
-}
+## Validating the schema
 
-{
-"name": "New York Times - World News",
-"url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
-}
+- curl -X POST http://localhost:8080/v1/validate \
+   -H "Content-Type: application/json" \
+   -d '{"title": "Test Title"}'
 
-{
-"name": "CNN Top Stories",
-"url": "http://rss.cnn.com/rss/edition.rss"
-}
+## Wrong Validation of schema
+
+- curl -X POST http://localhost:8080/v1/validate \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+## For listing all the schema
+
+curl -X GET "http://localhost:9090/api/artifacts"
+
+## Swagger
+
+- swagger is used for documenting the REST-API.
+- It is Basically used in front end for integrating it to the backend.
+- Swagger is basically used for testing the API.
+  go build && ./rssagg
