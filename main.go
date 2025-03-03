@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -16,32 +18,70 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
+// Apicurio Schema Registry URL
+const schemaRegistryURL = "http://localhost:9090/api/artifacts/my-schema"
+
 // apiConfig struct stores the database connection instance
-// This will be used to handle API requests that interact with the database
 type apiConfig struct {
 	DB *database.Queries
 }
 
+// Fetch schema from Apicurio Registry
+func fetchSchema() (map[string]interface{}, error) {
+	resp, err := http.Get(schemaRegistryURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var schema map[string]interface{}
+	err = json.Unmarshal(body, &schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return schema, nil
+}
+
+// Validate incoming JSON data against schema
+func validateJSON(data []byte, schema map[string]interface{}) error {
+	var jsonData map[string]interface{}
+	err := json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return fmt.Errorf("invalid JSON format")
+	}
+
+	// Example: Check if 'title' field exists
+	if _, exists := jsonData["title"]; !exists {
+		return fmt.Errorf("missing required field: title")
+	}
+
+	return nil
+}
+
 func main() {
-	// Load the .env file to get environment variables
+	// Load environment variables
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Read the PORT environment variable
+	// Read required environment variables
 	portString := os.Getenv("PORT")
 	if portString == "" {
 		log.Fatal("$PORT must be set")
 	}
-
-	// Read the database connection URL from environment variables
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
 	}
 
-	// Establish a connection to the PostgreSQL database
+	// Establish database connection
 	conn, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Unable to connect to database:", err)
@@ -53,13 +93,13 @@ func main() {
 		DB: db,
 	}
 
-	// Start the background process for scraping feeds periodically
+	// Start background scraping
 	go startScrapping(db, 10, time.Minute)
 
-	// Create a new router for handling HTTP requests
+	// Initialize router
 	router := chi.NewRouter()
 
-	// Set up Cross-Origin Resource Sharing (CORS) middleware
+	// Enable CORS
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"https://*", "http://*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -68,47 +108,65 @@ func main() {
 		MaxAge:         300,
 	}))
 
-	// Define a sub-router for API versioning (v1)
+	// Define API routes
 	v1Router := chi.NewRouter()
 
-	// Health check endpoint
+	// Health check
 	v1Router.Get("/healthz", handlerReadiness)
-	// Test error handling endpoint
 	v1Router.Get("/err", handleErr)
 
-	// User management endpoints
-	v1Router.Post("/users", api_cfg.handlerCreateUser)                     // Create a new user
-	v1Router.Get("/users", api_cfg.middlewareAuth(api_cfg.handlerGetUser)) // Get authenticated user details
+	// User management
+	v1Router.Post("/users", api_cfg.handlerCreateUser)
+	v1Router.Get("/users", api_cfg.middlewareAuth(api_cfg.handlerGetUser))
 
-	// Feed management endpoints
-	v1Router.Post("/feeds", api_cfg.middlewareAuth(api_cfg.handlerCreateFeed)) // Create a feed
-	v1Router.Get("/feeds", api_cfg.handlerGetFeeds)                            // Get all feeds
+	// Feed management
+	v1Router.Post("/feeds", api_cfg.middlewareAuth(api_cfg.handlerCreateFeed))
+	v1Router.Get("/feeds", api_cfg.handlerGetFeeds)
 
-	// Fetching posts related to user's followed feeds
+	// Fetching posts for user
 	v1Router.Get("/posts", api_cfg.middlewareAuth(api_cfg.handlerGetPostsForUser))
 
-	// Feed follow/unfollow operations
-	v1Router.Post("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerCreateFeedFollows))                 // Follow a feed
-	v1Router.Get("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerGetFeedFollows))                     // Get followed feeds
-	v1Router.Delete("/feed_follows/{feedFollowID}", api_cfg.middlewareAuth(api_cfg.handlerDeleteFeedFollow)) // Unfollow a feed
+	// Feed follow/unfollow
+	v1Router.Post("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerCreateFeedFollows))
+	v1Router.Get("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerGetFeedFollows))
+	v1Router.Delete("/feed_follows/{feedFollowID}", api_cfg.middlewareAuth(api_cfg.handlerDeleteFeedFollow))
 
-	// Mount v1Router under the /v1 path
+	// Schema validation endpoint
+	v1Router.Post("/validate", func(w http.ResponseWriter, r *http.Request) {
+		schema, err := fetchSchema()
+		if err != nil {
+			http.Error(w, "Failed to fetch schema", http.StatusInternalServerError)
+			return
+		}
+
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		err = validateJSON(body, schema)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Write([]byte("JSON is valid!"))
+	})
+
+	// Mount API routes
 	router.Mount("/v1", v1Router)
 
-	// Create and start the HTTP server
+	// Start server
 	srv := &http.Server{
 		Handler: router,
 		Addr:    ":" + portString,
 	}
 
-	// Log the port the server is listening on
 	log.Printf("Listening on port %s\n", portString)
 
-	// Start the server and log any errors
 	err = srv.ListenAndServe()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("Port: %s\n", portString)
 }
