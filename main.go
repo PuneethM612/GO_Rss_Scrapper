@@ -89,7 +89,7 @@ func main() {
 
 	// Initialize database queries
 	db := database.New(conn)
-	api_cfg := apiConfig{
+	apiCfg := apiConfig{
 		DB: db,
 	}
 
@@ -116,20 +116,20 @@ func main() {
 	v1Router.Get("/err", handleErr)
 
 	// User management
-	v1Router.Post("/users", api_cfg.handlerCreateUser)
-	v1Router.Get("/users", api_cfg.middlewareAuth(api_cfg.handlerGetUser))
+	v1Router.Post("/users", apiCfg.handlerCreateUser)
+	v1Router.Get("/users", apiCfg.middlewareAuth(apiCfg.handlerGetUser))
 
 	// Feed management
-	v1Router.Post("/feeds", api_cfg.middlewareAuth(api_cfg.handlerCreateFeed))
-	v1Router.Get("/feeds", api_cfg.handlerGetFeeds)
+	v1Router.Post("/feeds", apiCfg.middlewareAuth(apiCfg.handlerCreateFeed))
+	v1Router.Get("/feeds", apiCfg.handlerGetFeeds)
 
 	// Fetching posts for user
-	v1Router.Get("/posts", api_cfg.middlewareAuth(api_cfg.handlerGetPostsForUser))
+	v1Router.Get("/posts", apiCfg.middlewareAuth(apiCfg.handlerGetPostsForUser))
 
 	// Feed follow/unfollow
-	v1Router.Post("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerCreateFeedFollows))
-	v1Router.Get("/feed_follows", api_cfg.middlewareAuth(api_cfg.handlerGetFeedFollows))
-	v1Router.Delete("/feed_follows/{feedFollowID}", api_cfg.middlewareAuth(api_cfg.handlerDeleteFeedFollow))
+	v1Router.Post("/feed_follows", apiCfg.middlewareAuth(apiCfg.handlerCreateFeedFollows))
+	v1Router.Get("/feed_follows", apiCfg.middlewareAuth(apiCfg.handlerGetFeedFollows))
+	v1Router.Delete("/feed_follows/{feedFollowID}", apiCfg.middlewareAuth(apiCfg.handlerDeleteFeedFollow))
 
 	// Schema validation endpoint
 	v1Router.Post("/validate", func(w http.ResponseWriter, r *http.Request) {
