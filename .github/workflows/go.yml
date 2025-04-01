@@ -1,4 +1,4 @@
-name: Simple Go CI
+name: Simple Go CI with Docker
 
 on:
   push:
@@ -23,3 +23,6 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+
+      - name: Build Docker image
+        run: docker build -t go-rss-scraper .
