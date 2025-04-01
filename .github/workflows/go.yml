@@ -12,8 +12,8 @@ permissions:
   packages: write
 
 jobs:
-  # Simple build and Docker job
-  build-and-push:
+  # Build and test job
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +31,16 @@ jobs:
       - name: Test
         run: go test ./...
 
+  # Build and push Docker image
+  build-and-push:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       # Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -43,7 +53,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build Docker image
+      # List source files for debugging
+      - name: List source files
+        run: find . -type f -name "*.go" | sort
+
+      # Build Docker image with verbose output
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -54,3 +68,7 @@ jobs:
             ghcr.io/puneethm612/go_rss_scrapper:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Add build arguments for more verbose output
+          build-args: |
+            BUILDKIT_STEP_LOG_MAX_SIZE=10000000
+            BUILDKIT_STEP_LOG_MAX_SPEED=10000000
